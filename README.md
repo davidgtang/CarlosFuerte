@@ -34,7 +34,7 @@ git remote add upstream https://github.com/davidgtang/CarlosFuerte
 ```
 
 # Syncing Master to Local Fork
-https://help.github.com/articles/syncing-a-fork/
+https://help.github.com/articles/syncing-a-fork/  
 Everytime you start working, make sure you're synced to the upstream master.
 ```
 git fetch upstream

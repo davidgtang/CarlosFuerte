@@ -1,6 +1,9 @@
 # CarlosFuerte
 Charlie Strong's Turtleneck
 
+
+<img src="https://s3.amazonaws.com/cuttings/backgrounds/291230/Charlie%20Strong.jpg" width="300px" style="display: inline-block; margin-top: 5px;">
+
 Links:
 
 http://rogerdudler.github.io/git-guide

@@ -10,7 +10,7 @@ http://rogerdudler.github.io/git-guide
 https://help.github.com/articles/fork-a-repo/
 
 ## Step 1:
-Navigate to github.com/davidgtang/CarlosFuerte and hit the fork button at the top right.
+Navigate to https://github.com/davidgtang/CarlosFuerte and hit the fork button at the top right.
 
 ## Step 2:
 Clone your fork in location of your choice
@@ -33,6 +33,7 @@ git remote add upstream https://github.com/davidgtang/CarlosFuerte
 
 # Syncing Master to Local Fork
 https://help.github.com/articles/syncing-a-fork/
+Everytime you start working, make sure you're synced to the upstream master.
 <pre>
 git fetch upstream
 git checkout master

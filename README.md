@@ -1,8 +1,7 @@
-# CarlosHuerte
+# CarlosFuerte
 Charlie Strong's Turtleneck
 
 Links:
-
 
 http://rogerdudler.github.io/git-guide
 

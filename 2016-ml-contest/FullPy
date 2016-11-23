@@ -1,11 +1,29 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Nov  7 19:29:02 2016
 
-@author: dgt377
-"""
+# coding: utf-8
 
+# # Facies classification using Machine Learning
+# 
+# #### Brendon Hall, [Enthought](https://www.enthought.com/)
+# 
+# This notebook demonstrates how to train a machine learning algorithm to predict facies from well log data.  The dataset we will use comes from a class excercise from The University of Kansas on [Neural Networks and Fuzzy Systems](http://www.people.ku.edu/~gbohling/EECS833/).  This exercise is based on a consortium project to use machine learning techniques to create a reservoir model of the largest gas fields in North America, the Hugoton and Panoma Fields. For more info on the origin of the data, see [Bohling and Dubois (2003)](http://www.kgs.ku.edu/PRS/publication/2003/ofr2003-50.pdf) and [Dubois et al. (2007)](http://dx.doi.org/10.1016/j.cageo.2006.08.011). 
+# 
+# The dataset we will use is log data from nine wells that have been labeled with a facies type based on oberservation of core.  We will use this log data to train a support vector machine to classify facies types.  Support vector machines (or SVMs) are a type of supervised learning model that can be trained on data to perform classification and regression tasks.  The SVM algorithm uses the training data to fit an optimal hyperplane between the different classes (or facies, in our case).  We will use the SVM implementation in [scikit-learn](http://scikit-learn.org/stable/modules/svm.html).
+# 
+# First we will [explore the dataset](#Exploring-the-dataset).  We will load the training data from 9 wells, and take a look at what we have to work with.  We will plot the data from a couple wells, and create cross plots to look at the variation within the data.  
+# 
+# Next we will [condition the data set](#Conditioning-the-data-set).  We will remove the entries that have incomplete data.  The data will be scaled to have zero mean and unit variance.  We will also split the data into training and test sets.
+# 
+# We will then be ready to [build the SVM classifier](#Building-the-SVM-classifier).  We will demonstrate how to use the cross validation set to do [model parameter selection](#Model-parameter-selection).
+# 
+# Finally, once we have a built and tuned the classifier, we can [apply the trained model](#Applying-the-classification-model-to-new-data) to classify facies in wells which do not already have labels.  We will apply the classifier to two wells, but in principle you could apply the classifier to any number of wells that had the same log data.
+
+# ## Exploring the dataset
+# 
+# First, we will examine the data set we will use to train the classifier.  The training data is contained in the file `facies_vectors.csv`.  The dataset consists of 5 wireline log measurements, two indicator variables and a facies label at half foot intervals.  In machine learning terminology, each log measurement is a feature vector that maps a set of 'features' (the log measurements) to a class (the facies type).  We will use the pandas library to load the data into a dataframe, which provides a convenient data structure to work with well log data.
+
+# In[121]:
+
+get_ipython().magic('matplotlib inline')
 import pandas as pd
 import numpy as np
 import matplotlib as mpl
@@ -17,27 +35,76 @@ from pandas import set_option
 set_option("display.max_rows", 10)
 pd.options.mode.chained_assignment = None
 
-#%%
-# Loading Data
-filename = './2016-ml-contest/training_data.csv'
+filename = 'training_data.csv'
 training_data = pd.read_csv(filename)
 training_data
 
-# Converts to category
+
+# This data is from the Council Grove gas reservoir in Southwest Kansas.  The Panoma Council Grove Field is predominantly a carbonate gas reservoir encompassing 2700 square miles in Southwestern Kansas.  This dataset is from nine wells (with 4149 examples), consisting of a set of seven predictor variables and a rock facies (class) for each example vector and validation (test) data (830 examples from two wells) having the same seven predictor variables in the feature vector.  Facies are based on examination of cores from nine wells taken vertically at half-foot intervals. Predictor variables include five from wireline log measurements and two geologic constraining variables that are derived from geologic knowledge. These are essentially continuous variables sampled at a half-foot sample rate. 
+# 
+# The seven predictor variables are:
+# * Five wire line log curves include [gamma ray](http://petrowiki.org/Gamma_ray_logs) (GR), [resistivity logging](http://petrowiki.org/Resistivity_and_spontaneous_%28SP%29_logging) (ILD_log10),
+# [photoelectric effect](http://www.glossary.oilfield.slb.com/en/Terms/p/photoelectric_effect.aspx) (PE), [neutron-density porosity difference and average neutron-density porosity](http://petrowiki.org/Neutron_porosity_logs) (DeltaPHI and PHIND). Note, some wells do not have PE.
+# * Two geologic constraining variables: nonmarine-marine indicator (NM_M) and relative position (RELPOS)
+# 
+# The nine discrete facies (classes of rocks) are: 
+# 1. Nonmarine sandstone
+# 2. Nonmarine coarse siltstone 
+# 3. Nonmarine fine siltstone 
+# 4. Marine siltstone and shale 
+# 5. Mudstone (limestone)
+# 6. Wackestone (limestone)
+# 7. Dolomite
+# 8. Packstone-grainstone (limestone)
+# 9. Phylloid-algal bafflestone (limestone)
+# 
+# These facies aren't discrete, and gradually blend into one another. Some have neighboring facies that are rather close.  Mislabeling within these neighboring facies can be expected to occur.  The following table lists the facies, their abbreviated labels and their approximate neighbors.
+# 
+# Facies |Label| Adjacent Facies
+# :---: | :---: |:--:
+# 1 |SS| 2
+# 2 |CSiS| 1,3
+# 3 |FSiS| 2
+# 4 |SiSh| 5
+# 5 |MS| 4,6
+# 6 |WS| 5,7
+# 7 |D| 6,8
+# 8 |PS| 6,7,9
+# 9 |BS| 7,8
+# 
+# Let's clean up this dataset.  The 'Well Name' and 'Formation' columns can be turned into a categorical data type.  
+
+# In[122]:
+
 training_data['Well Name'] = training_data['Well Name'].astype('category')
 training_data['Formation'] = training_data['Formation'].astype('category')
 training_data['Well Name'].unique()
-training_data.describe() # Gives you stats on things
 
-blind = training_data[training_data['Well Name'] == 'SHANKLE'] # Finds all Shankle points and puts it into blind
-training_data = training_data[training_data['Well Name'] != 'SHANKLE'] # All other wells
 
-#%%
+# In[123]:
+
+training_data.describe()
+
+
+# This is a quick view of the statistical distribution of the input variables.  Looking at the `count` values, there are 3232 feature vectors in the training set.
+
+# Remove a single well to use as a blind test later.
+
+# In[124]:
+
+blind = training_data[training_data['Well Name'] == 'SHANKLE']
+training_data = training_data[training_data['Well Name'] != 'SHANKLE']
+
+
+# These are the names of the 10 training wells in the Council Grove reservoir.  Data has been recruited into pseudo-well 'Recruit F9' to better represent facies 9, the Phylloid-algal bafflestone. 
+# 
+# Before we plot the well data, let's define a color map so the facies are represented by consistent color in all the plots in this tutorial.  We also create the abbreviated facies labels, and add those to the `facies_vectors` dataframe.
+
+# In[125]:
+
 # 1=sandstone  2=c_siltstone   3=f_siltstone 
 # 4=marine_silt_shale 5=mudstone 6=wackestone 7=dolomite
-# 8=packstone 9=ba[]fflestone
-
-# Hex color codes
+# 8=packstone 9=bafflestone
 facies_colors = ['#F4D03F', '#F5B041','#DC7633','#6E2C00',
        '#1B4F72','#2E86C1', '#AED6F1', '#A569BD', '#196F3D']
 
@@ -45,23 +112,19 @@ facies_labels = ['SS', 'CSiS', 'FSiS', 'SiSh', 'MS',
                  'WS', 'D','PS', 'BS']
 #facies_color_map is a dictionary that maps facies labels
 #to their respective colors
-facies_color_map = {}   # Dictionary # enumerate puts out ind=0, label=SS, and loops through the whole thing
+facies_color_map = {}
 for ind, label in enumerate(facies_labels):
     facies_color_map[label] = facies_colors[ind]
-   
+
 def label_facies(row, labels):
     return labels[ row['Facies'] -1]
     
 training_data.loc[:,'FaciesLabels'] = training_data.apply(lambda row: label_facies(row, facies_labels), axis=1)
 
- 
-#def label_facies(row): 
-#    print(row)
-#    return np.sum(row)
-    
-#training_data.loc[:,'FaciesLabels'] = training_data.apply(lambda row: label_facies(row, facies_labels), axis=1)
-facies_color_map
-#%%
+
+# Let's take a look at the data from individual wells in a more familiar log plot form.  We will create plots for the five well log variables, as well as a log for facies labels.  The plots are based on the those described in Alessandro Amato del Monte's [excellent tutorial](https://github.com/seg/tutorials/tree/master/1504_Seismic_petrophysics_1).
+
+# In[126]:
 
 def make_facies_log_plot(logs, facies_colors):
     #make sure logs are sorted by depth
@@ -71,7 +134,7 @@ def make_facies_log_plot(logs, facies_colors):
     
     ztop=logs.Depth.min(); zbot=logs.Depth.max()
     
-    cluster=np.repeat(np.expand_dims(logs['Facies'].values,1), 100, 1) # Makes it a nx1, repeating values along an dimension
+    cluster=np.repeat(np.expand_dims(logs['Facies'].values,1), 100, 1)
     
     f, ax = plt.subplots(nrows=1, ncols=6, figsize=(8, 12))
     ax[0].plot(logs.GR, logs.Depth, '-g')
@@ -117,10 +180,16 @@ def make_facies_log_plot(logs, facies_colors):
 # Placing the log plotting code in a function will make it easy to plot the logs from multiples wells, and can be reused later to view the results when we apply the facies classification model to other wells.  The function was written to take a list of colors and facies labels as parameters.  
 # 
 # We then show log plots for wells `SHRIMPLIN`.  
-#%%
+
+# In[127]:
+
 make_facies_log_plot(
     training_data[training_data['Well Name'] == 'SHRIMPLIN'],
     facies_colors)
+
+
+# In addition to individual wells, we can look at how the various facies are represented by the entire training set.  Let's plot a histogram of the number of training examples for each facies class.
+
 # In[128]:
 
 #count the number of unique entries for each facies, sort them by

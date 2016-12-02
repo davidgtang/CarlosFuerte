@@ -49,6 +49,8 @@ def label_facies(row, labels):
 training_data.loc[:,'FaciesLabels'] = training_data.apply(lambda row: label_facies(row, facies_labels), axis=1)
 # %%
 feature_vectors = training_data.drop(['Formation', 'Well Name', 'Depth','Facies','FaciesLabels'], axis=1)#,'FaciesLabels'
+correct_facies_labels = training_data['Facies'].values
+
 # %%
 scaler = preprocessing.StandardScaler().fit(feature_vectors)
 scaled_features = scaler.transform(feature_vectors)
